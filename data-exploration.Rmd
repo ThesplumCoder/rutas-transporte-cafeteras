@@ -4,6 +4,54 @@ output:
   html_document:
     toc: yes
     df_print: paged
-  html_notebook:
-    toc: yes
 ---
+
+# Tratamiento de los datos originales
+Importamos los datos desde los archivos:
+```{r}
+eva_2007_2018 <- read.csv("datasets/evaluaciones-agropecuarias-municipales_2007-2018.csv")
+eva_2019_2022 <- read.csv("datasets/evaluaciones-agropecuarias-municipales_2019-2022.csv")
+```
+
+Vista previa a cada uno de los *dataframes*:
+```{r}
+head(eva_2007_2018)
+head(eva_2019_2022)
+```
+
+# Exploración
+
+Miramos cuáles son los cultivos que tienen más apariciones en los registros. 
+Limitamos el gráfico a los 10 más presentes:
+```{r}
+crops_presence <- sort(table(eva_2007_2018$CULTIVO), decreasing = TRUE)
+
+barplot(crops_presence[1:10], 
+        ylim = c(0, 30000), 
+        col = rainbow(10), 
+        las = 3, 
+        main = "Presencia de registros para cada cultivo en el país",
+        xlab = "Cultivo",
+        ylab = "Cantidad de registros")
+```
+
+Elegido el café como cultivo de interés, podemos dar un vistazo a los 
+departamentos que tienen más municipios productores en promedio, a través de los 
+años:
+```{r}
+coffee_producers <- subset(eva_2007_2018, CULTIVO == "CAFE")
+years_range <- 11
+departments_presence <- sort(table(coffee_producers$DEPARTAMENTO) / years_range, decreasing = TRUE)
+
+barplot(departments_presence, 
+        ylim = c(0, 100), 
+        col = rainbow(32), 
+        las = 3, 
+        xpd = TRUE, 
+        main = "Municipios productores",
+        xlab = "Departamento",
+        ylab = "Media de municipios")
+```
+
+
+
