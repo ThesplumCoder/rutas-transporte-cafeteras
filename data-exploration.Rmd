@@ -10,13 +10,26 @@ output:
 Importamos los datos desde los archivos:
 ```{r}
 eva_2007_2018 <- read.csv("datasets/evaluaciones-agropecuarias-municipales_2007-2018.csv")
-eva_2019_2022 <- read.csv("datasets/evaluaciones-agropecuarias-municipales_2019-2022.csv")
+#eva_2019_2022 <- read.csv("datasets/evaluaciones-agropecuarias-municipales_2019-2022.csv")
 ```
+
+Resúmen de cada una de las columnas  de los conjuntos de datos:
+```{r}
+summary(eva_2007_2018)
+#summary(eva_2019_2022)
+```
+
+Como son muchas columnas, retiramos las columnas que no vamos a usar, nos 
+quedamos con las que vamos a utilizar:
+```{r}
+eva_2007_2018 <- subset(eva_2007_2018, select = c("DEPARTAMENTO", "MUNICIPIO", "CULTIVO", "AÑO", "Producción..t."))
+```
+
 
 Vista previa a cada uno de los *dataframes*:
 ```{r}
 head(eva_2007_2018)
-head(eva_2019_2022)
+#head(eva_2019_2022)
 ```
 
 # Exploración
@@ -53,5 +66,14 @@ barplot(departments_presence,
         ylab = "Media de municipios")
 ```
 
+Como Antioquia es el departamento con más presente como productor de café a 
+través de los años, observamos su tendencia de producción. Esto con el fin de 
+poder modelar la función de producción, que nos servirá para la simulación.
+```{r}
+antioquia_coffee <- subset(coffee_producers, DEPARTAMENTO == "ANTIOQUIA")
+
+production_2018 <- subset(antioquia_coffee, AÑO == 2018)
+plot(production_2018$Producción..t.)
+```
 
 
