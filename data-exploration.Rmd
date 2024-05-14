@@ -1,35 +1,68 @@
 ---
 title: "Exploración de los datos de producción agrícola"
 output:
-  html_document:
-    toc: yes
-    df_print: paged
+  html_document: 
+    toc: true
 ---
 
-# Tratamiento de los datos originales
+# Tratamiento de los datos
+
+## Importación
+
 Importamos los datos desde los archivos:
 ```{r}
 eva_2007_2018 <- read.csv("datasets/evaluaciones-agropecuarias-municipales_2007-2018.csv")
-#eva_2019_2022 <- read.csv("datasets/evaluaciones-agropecuarias-municipales_2019-2022.csv")
+coffee_production_antioquia <- read.csv("datasets/produccion-mensual-cafe-antioquia_1956-2019.csv")
+coffee_production_antioquia <- coffee_production_antioquia[, -c(1)]
 ```
 
-Resúmen de cada una de las columnas  de los conjuntos de datos:
+## Selección de datos relevantes
+
+Separamos lo valores de la columna mes de los datos de producción mensual de 
+café. Esto se hace para tener los años en una columna aparte:
 ```{r}
-summary(eva_2007_2018)
-#summary(eva_2019_2022)
+month_year <- strsplit(coffee_production_antioquia$Mes, split = "-")
+
+parsedProduction <- c()
+for(i in 1:length(coffee_production_antioquia$Producción)) {
+  monthly_production <- unlist(strsplit(x = coffee_production_antioquia$Producción[i], split = ","))
+  monthly_production <- paste(monthly_production, collapse = "")
+  parsedProduction <- c(parsedProduction, monthly_production)
+}
+parsedProduction <- as.integer(parsedProduction)
+
+coffee_production_antioquia <- cbind(coffee_production_antioquia, 
+                                     data.frame(Producción = parsedProduction))
+coffee_production_antioquia <- cbind(coffee_production_antioquia, 
+                                     do.call(rbind, month_year))
+
+coffee_production_antioquia <- coffee_production_antioquia[, -c(1, 2)]
+colnames(coffee_production_antioquia) <- c("Producción(sacos)", "Mes", "Año")
+colnames(eva_2007_2018)[13] = "PRODUCCIÓN(t)"
 ```
 
 Como son muchas columnas, retiramos las columnas que no vamos a usar, nos 
 quedamos con las que vamos a utilizar:
 ```{r}
-eva_2007_2018 <- subset(eva_2007_2018, select = c("DEPARTAMENTO", "MUNICIPIO", "CULTIVO", "AÑO", "Producción..t."))
+eva_2007_2018 <- subset(eva_2007_2018, 
+                        select = c("DEPARTAMENTO", 
+                                   "MUNICIPIO", 
+                                   "CULTIVO", 
+                                   "AÑO", 
+                                   "PRODUCCIÓN(t)"))
 ```
 
+## Previsualización de los conjuntos de datos
+
+Resúmen de cada una de las columnas  de los conjuntos de datos:
+```{r}
+summary(eva_2007_2018)
+```
 
 Vista previa a cada uno de los *dataframes*:
 ```{r}
 head(eva_2007_2018)
-#head(eva_2019_2022)
+head(coffee_production_antioquia)
 ```
 
 # Exploración
@@ -73,7 +106,21 @@ poder modelar la función de producción, que nos servirá para la simulación.
 antioquia_coffee <- subset(coffee_producers, DEPARTAMENTO == "ANTIOQUIA")
 
 production_2018 <- subset(antioquia_coffee, AÑO == 2018)
-plot(production_2018$Producción..t.)
+production_2017 <- subset(antioquia_coffee, AÑO == 2017)
+plot(production_2018$`PRODUCCIÓN(t)`)
+lines(production_2017$`PRODUCCIÓN(t)`, col = "blue")
 ```
 
+Utilizamos el conjunto de datos que tiene observaciones de la producción mensual 
+de café verde, en miles de sacos de 60Kg.
+```{r}
+antioquia_coffee_january_allYears <- subset(coffee_production_antioquia, Mes == "ene")
+
+plot(x = antioquia_coffee_january_allYears$Año, 
+     y = antioquia_coffee_january_allYears$`Producción(sacos)`, 
+     type = "l",
+     main = "Tendencia de producción del mes de enero",
+     xlab = "Año",
+     ylab = "Miles de sacos de 60Kg")
+```
 
