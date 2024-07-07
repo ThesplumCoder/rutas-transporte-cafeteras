@@ -5,6 +5,11 @@ output:
     toc: true
 ---
 
+```{r echo=FALSE}
+library(igraph)
+library(ggplot2)
+```
+
 # Tratamiento de los datos
 
 ## Importación
@@ -124,3 +129,37 @@ plot(x = antioquia_coffee_january_allYears$Año,
      ylab = "Miles de sacos de 60Kg")
 ```
 
+# Rutas de transporte
+```{r}
+cities <- c("Medellín", "Bucaramanga", "Bogotá", "Tunja", "Pasto", "Puerto_Cartagena", "Puerto_Barranquilla", "Cali", "Ibagué", "Cúcuta", "Neiva", "Popayán")
+
+rutas <- data.frame(
+  origen = c(cities[1], cities[1], cities[1], cities[1], cities[2], cities[2], cities[2], cities[3], cities[3], cities[4], cities[6], cities[6], cities[6], cities[6], cities[6], cities[7], cities[7], cities[7], cities[7], cities[7], cities[8], cities[8], cities[8], cities[8], cities[8], cities[8], cities[8], cities[9], cities[9], cities[9], cities[9], cities[9], cities[9], cities[9], cities[9], cities[10], cities[10], cities[10], cities[10], cities[10], cities[10], cities[10], cities[10], cities[10], cities[11], cities[11], cities[11], cities[11], cities[11], cities[11], cities[11], cities[11], cities[11], cities[11], cities[12], cities[12], cities[12], cities[12], cities[12], cities[12], cities[12], cities[12], cities[12], cities[12], cities[12]),
+  destino = c(cities[2], cities[3], cities[4], cities[5], cities[3], cities[4], cities[5], cities[4], cities[5], cities[5], cities[1], cities[2], cities[3], cities[4], cities[5], cities[1], cities[2], cities[3], cities[4], cities[5], cities[1], cities[2], cities[3], cities[4], cities[5], cities[6], cities[7], cities[1], cities[2], cities[3], cities[4], cities[5], cities[6], cities[7], cities[8], cities[1], cities[2], cities[3], cities[4], cities[5], cities[6], cities[7], cities[8], cities[9], cities[1], cities[2], cities[3], cities[4], cities[5], cities[6], cities[7], cities[8], cities[9], cities[10], cities[1], cities[2], cities[3], cities[4], cities[5], cities[6], cities[7], cities[8], cities[9], cities[10], cities[11]),
+  weight = c(383, 432, 413, 813, 397, 282, 1136, 141, 833, 961, 663, 633, 1065, 908, 1519, 700, 577, 1009, 852, 1511, 443, 761, 457, 587, 381, 1102, 1137, 418, 509, 211, 341, 721, 1050, 1016, 494, 579, 198, 568, 429, 1347, 723, 690, 959, 712, 585, 676, 322, 452, 466, 1217, 1256, 382, 210, 874, 571, 947, 584, 723, 244, 1231, 1267, 139, 481, 1145, 271)
+)
+
+# Crear el grafo
+G <- graph_from_data_frame(rutas, directed = FALSE, vertices = data.frame(name = cities))
+plot(G)
+```
+
+Función para hallar la ruta más corta entre dos puntos
+```{r}
+best_route <- function(from, to) {
+  sp <- shortest_paths(G, from = from, to = to, weights = E(G)$weight, algorithm = "dijkstra", output = "both")
+  
+  path_vertices <- sp$vpath[[1]]
+  path_cities <- V(G)$name[path_vertices]
+  
+  total <- sum(E(G, path = path_vertices)$weight)
+  
+  list(path_cities = path_cities, total = total)
+}
+```
+
+La función retorna las ciudades por las que se pasa y la cantidad de kilómetros por recorrer.
+
+```{r}
+best_route("Bogotá", "Puerto_Cartagena")
+```
