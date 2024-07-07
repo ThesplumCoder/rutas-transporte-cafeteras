@@ -1,0 +1,127 @@
+---
+title: "Exploración de los datos de producción agrícola"
+output:
+  html_document: 
+    toc: true
+    number_sections: true
+---
+
+# Tratamiento de los datos
+
+## Importación
+
+Importamos los datos desde los archivos:
+```{r}
+eva_2007_2018 <- read.csv("datasets/evaluaciones-agropecuarias-municipales_2007-2018.csv")
+coffee_production_antioquia <- read.csv("datasets/produccion-mensual-cafe-antioquia_1956-2019.csv")
+coffee_production_antioquia <- coffee_production_antioquia[, -c(1)]
+```
+
+## Selección de datos relevantes
+
+Separamos lo valores de la columna mes de los datos de producción mensual de 
+café. Esto se hace para tener los años en una columna aparte:
+```{r}
+month_year <- strsplit(coffee_production_antioquia$Mes, split = "-")
+
+parsedProduction <- c()
+for(i in 1:length(coffee_production_antioquia$Producción)) {
+  monthly_production <- unlist(strsplit(x = coffee_production_antioquia$Producción[i], split = ","))
+  monthly_production <- paste(monthly_production, collapse = "")
+  parsedProduction <- c(parsedProduction, monthly_production)
+}
+parsedProduction <- as.integer(parsedProduction)
+
+coffee_production_antioquia <- cbind(coffee_production_antioquia, 
+                                     data.frame(Producción = parsedProduction))
+coffee_production_antioquia <- cbind(coffee_production_antioquia, 
+                                     do.call(rbind, month_year))
+
+coffee_production_antioquia <- coffee_production_antioquia[, -c(1, 2)]
+colnames(coffee_production_antioquia) <- c("Producción(sacos)", "Mes", "Año")
+colnames(eva_2007_2018)[13] = "PRODUCCIÓN(t)"
+```
+
+Como son muchas columnas, retiramos las columnas que no vamos a usar, nos 
+quedamos con las que vamos a utilizar:
+```{r}
+eva_2007_2018 <- subset(eva_2007_2018, 
+                        select = c("DEPARTAMENTO", 
+                                   "MUNICIPIO", 
+                                   "CULTIVO", 
+                                   "AÑO", 
+                                   "PRODUCCIÓN(t)"))
+```
+
+## Previsualización de los conjuntos de datos
+
+Resúmen de cada una de las columnas  de los conjuntos de datos:
+```{r}
+summary(eva_2007_2018)
+```
+
+Vista previa a cada uno de los *dataframes*:
+```{r}
+head(eva_2007_2018)
+head(coffee_production_antioquia)
+```
+
+# Exploración
+
+Miramos cuáles son los cultivos que tienen más apariciones en los registros. 
+Limitamos el gráfico a los 10 más presentes:
+```{r}
+crops_presence <- sort(table(eva_2007_2018$CULTIVO), decreasing = TRUE)
+
+barplot(crops_presence[1:10], 
+        ylim = c(0, 30000), 
+        col = rainbow(10), 
+        las = 3, 
+        main = "Presencia de registros para cada cultivo en el país",
+        xlab = "Cultivo",
+        ylab = "Cantidad de registros")
+```
+
+Elegido el café como cultivo de interés, podemos dar un vistazo a los 
+departamentos que tienen más municipios productores en promedio, a través de los 
+años:
+```{r}
+coffee_producers <- subset(eva_2007_2018, CULTIVO == "CAFE")
+years_range <- 11
+departments_presence <- sort(table(coffee_producers$DEPARTAMENTO) / years_range, decreasing = TRUE)
+
+barplot(departments_presence, 
+        ylim = c(0, 100), 
+        col = rainbow(32), 
+        las = 3, 
+        xpd = TRUE, 
+        main = "Municipios productores",
+        xlab = "Departamento",
+        ylab = "Media de municipios")
+```
+
+Como Antioquia es el departamento con más presente como productor de café a 
+través de los años, observamos su tendencia de producción. Esto con el fin de 
+poder modelar la función de producción, que nos servirá para la simulación.
+```{r}
+antioquia_coffee <- subset(coffee_producers, DEPARTAMENTO == "ANTIOQUIA")
+
+production_2018 <- subset(antioquia_coffee, AÑO == 2018)
+production_2017 <- subset(antioquia_coffee, AÑO == 2017)
+plot(production_2018$`PRODUCCIÓN(t)`)
+lines(production_2017$`PRODUCCIÓN(t)`, col = "blue")
+```
+
+Utilizamos el conjunto de datos que tiene observaciones de la producción mensual 
+de café verde, en miles de sacos de 60Kg.
+```{r}
+antioquia_coffee_january_allYears <- subset(coffee_production_antioquia, Mes == "ene")
+
+plot(x = antioquia_coffee_january_allYears$Año, 
+     y = antioquia_coffee_january_allYears$`Producción(sacos)`, 
+     type = "l",
+     main = "Tendencia de producción del mes de enero",
+     xlab = "Año",
+     ylab = "Miles de sacos de 60Kg")
+```
+
