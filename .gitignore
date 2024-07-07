@@ -50,6 +50,3 @@ rsconnect/
 
 # Output HTML files
 *.html
-
-# folder with datasets
-datasets/
