@@ -125,3 +125,120 @@ plot(x = antioquia_coffee_january_allYears$Año,
      ylab = "Miles de sacos de 60Kg")
 ```
 
+```{r}
+hist(coffee_production_antioquia$`Producción(sacos)` * 60,
+     breaks = 20,
+     col = "sandybrown")
+```
+
+# Simulación
+
+## Generación de producción de café
+
+En la exploración de los datos de producción de café para Antioquia, vemos un 
+patrón reconocible. Los datos parece que siguen una distribución de probabilidad 
+distinguible.
+
+Para construir la función de generación aleatoria de producción de café vamos a 
+utilizar la función de probabilidad de Weibull. La función de distribución 
+acumulada de Weibull que vamos a usar es:
+$$
+F_{(x)} = 1 - e^{-(\lambda x)^\alpha}
+$$
+Implementamos la función de densidad y la función de distribución de Weibull.
+```{r}
+density_weibull <- function(x, lambda, alpha) {
+  lambda * alpha * ((lambda * x) ** (alpha - 1)) * exp(-(lambda * x) ** alpha)
+}
+
+cummulative_weibull <- function(x, lambda, alpha) {
+  1 - exp(-(lambda * x) ** alpha)
+}
+```
+
+### Uso de la función inversa para la función generadora
+
+Función generadora utilizando la función inversa.
+$$
+F_{(x)} = 1 - e^{-(\lambda x)^\alpha}, x > 0 \\
+U = 1 - e^{-(\lambda x)^\alpha} \\
+e^{-(\lambda x)^\alpha} = 1 - U \\
+-(\lambda x)^\alpha = Ln(1 - U) \\
+\lambda x = (-Ln(1 - U))^{1 / \alpha} \\
+x = \frac{{(-Ln(1 - U))}^{1/ \alpha}}{\lambda}
+$$
+
+```{r}
+random_weibull <- function(lambda, alpha) {
+  x <- ((-log(1 - runif(1))) ** (1 / alpha)) / (lambda)
+  
+  return(x)
+}
+```
+
+Se prueba para una forma conocida de la función de densidad, en este caso con 
+los parámetros de $\lambda = 1$ y $\alpha = 1.5$.
+```{r}
+tests <- c()
+for (iter in 1:1000) {
+  tests <- c(tests, random_weibull(lambda = 1, alpha = 1.5))
+}
+
+hist(tests,
+     freq = FALSE,
+     xlim = c(0, 2.5),
+     ylim = c(0, 1),
+     breaks = 15,
+     col = "lightskyblue",
+     main = "Función de generación aletoria de Weibull",
+     xlab = "x", 
+     ylab = "Densidad de probabilidad")
+curve(density_weibull(x, lambda = 1, alpha = 1.5), 
+      from = 0, 
+      to = 2.5,
+      col = "red",
+      add = TRUE)
+```
+
+
+### Ajuste usando el estimador de máxima verosimilitud
+
+Se construye la función que optimiza el parámetro $\lambda$ para la función de 
+distribución de Weibull.
+```{r}
+optimize_lambda <- function(coffee_production, alpha) {
+  lambda = ((length(coffee_production) * alpha) / (alpha * sum(coffee_production ** alpha))) ** (1 / alpha)
+  
+  return(lambda)
+}
+```
+
+Se prueba la optimización y la función de generación aleatoria de producción.
+```{r}
+alpha <- 1.5
+lambda <- optimize_lambda(coffee_production = (coffee_production_antioquia$`Producción(sacos)` * 60), 
+                          alpha = alpha)
+
+coffee_tests <- c()
+for (iter in 1:1000) {
+  coffee_tests <- c(coffee_tests, random_weibull(lambda = lambda, alpha = alpha))
+}
+
+hist(coffee_tests,
+     col = "lightskyblue",
+     main = "Función de generación aletoria de producción de café",
+     xlab = "Kilos de café", 
+     ylab = "Frecuencia absoluta")
+```
+
+Comparamos con los datos reales:
+```{r}
+par(mfrow = c(1, 2))
+boxplot(coffee_tests,
+        col = "lightskyblue",
+        main = "Producción simulada")
+boxplot((coffee_production_antioquia$`Producción(sacos)` * 60),
+        col = "sandybrown",
+        main = "Producción observada")
+```
+
