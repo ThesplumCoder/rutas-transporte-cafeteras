@@ -38,7 +38,9 @@ coffee_production_antioquia <- cbind(coffee_production_antioquia,
                                      do.call(rbind, month_year))
 
 coffee_production_antioquia <- coffee_production_antioquia[, -c(1, 2)]
-colnames(coffee_production_antioquia) <- c("Producción(sacos)", "Mes", "Año")
+colnames(coffee_production_antioquia) <- c("Producción(kilos)", "Mes", "Año")
+coffee_production_antioquia$`Producción(kilos)` <- coffee_production_antioquia$`Producción(kilos)` * 60
+
 colnames(eva_2007_2018)[13] = "PRODUCCIÓN(t)"
 ```
 
@@ -113,22 +115,14 @@ lines(production_2017$`PRODUCCIÓN(t)`, col = "blue")
 ```
 
 Utilizamos el conjunto de datos que tiene observaciones de la producción mensual 
-de café verde, en miles de sacos de 60Kg.
+de café verde, en kilogramos.
 ```{r}
-antioquia_coffee_january_allYears <- subset(coffee_production_antioquia, Mes == "ene")
-
-plot(x = antioquia_coffee_january_allYears$Año, 
-     y = antioquia_coffee_january_allYears$`Producción(sacos)`, 
-     type = "l",
-     main = "Tendencia de producción del mes de enero",
-     xlab = "Año",
-     ylab = "Miles de sacos de 60Kg")
-```
-
-```{r}
-hist(coffee_production_antioquia$`Producción(sacos)` * 60,
+hist(coffee_production_antioquia$`Producción(kilos)`,
      breaks = 20,
-     col = "sandybrown")
+     col = "sandybrown",
+     main = "Producción mensual de café verde",
+     xlab = "Kilogramos",
+     ylab = "Frecuencia absoluta")
 ```
 
 # Simulación
@@ -213,18 +207,29 @@ optimize_lambda <- function(coffee_production, alpha) {
 }
 ```
 
+Con el ajuste creado, construimos la función que nos va a generar la producción 
+de café. Esta función se basa en el parámetro arbitrario que definamos para 
+$\alpha$ y optimiza $\lambda$.
+```{r}
+production_generator <- function(coffee_data, alpha_weibull, amount) {
+  lambda <- optimize_lambda(coffee_production = coffee_data, alpha = alpha_weibull)
+  
+  coffee_production <- c()
+  for (iter in 1:amount) {
+    coffee_production <- c(coffee_production, random_weibull(lambda = lambda, alpha = alpha_weibull))
+  }
+  
+  return(coffee_production)
+}
+```
+
 Se prueba la optimización y la función de generación aleatoria de producción.
 ```{r}
-alpha <- 1.5
-lambda <- optimize_lambda(coffee_production = (coffee_production_antioquia$`Producción(sacos)` * 60), 
-                          alpha = alpha)
-
-coffee_tests <- c()
-for (iter in 1:1000) {
-  coffee_tests <- c(coffee_tests, random_weibull(lambda = lambda, alpha = alpha))
-}
-
+coffee_tests <- production_generator(coffee_data = coffee_production_antioquia$`Producción(kilos)`, 
+                                     alpha_weibull = 2.2,
+                                     amount = 10000)
 hist(coffee_tests,
+     breaks = 20,
      col = "lightskyblue",
      main = "Función de generación aletoria de producción de café",
      xlab = "Kilos de café", 
@@ -237,8 +242,105 @@ par(mfrow = c(1, 2))
 boxplot(coffee_tests,
         col = "lightskyblue",
         main = "Producción simulada")
-boxplot((coffee_production_antioquia$`Producción(sacos)` * 60),
+boxplot(coffee_production_antioquia$`Producción(kilos)`,
         col = "sandybrown",
         main = "Producción observada")
 ```
 
+### Generalización para otros departamentos
+
+Utilizamos la prueba estadística de bondad de ajuste para establecer un criterio 
+de aceptación de los parámetros que elegimos para el ajuste.
+
+Implementamos la función para calcular el estadístico $\chi^2$.
+```{r}
+fit_test <- function(observed_data, expected_data) {
+  partitions <- length(observed_data)
+  significance <- 0.01
+  
+  chisq_test <- sum(((observed_data - expected_data) ** 2) / expected_data)
+  p_value <- qchisq(p = significance, 
+                    df = partitions - 1, 
+                    lower.tail = FALSE)
+  
+  results <- c(chisq_test, p_value)
+  return(results)
+}
+```
+
+Implementamos una función que nos permita encontrar las frecuencias de datos en 
+cada una de las particiones que definamos. Nos devolverá una matriz, en la 
+primera columna vendrán las cantidades esperadas; en consecuencia, en la segunda 
+vendrán las cantidades obtenidas.
+```{r}
+partition_calculator <- function(observed_data, lambda_weibull, alpha_weibull, partitions) {
+  expected_values <- c()
+  obtained_values <- c()
+  
+  size <- max(observed_data, na.rm = TRUE) / partitions
+  lower_limit <- 0
+  upper_limit <- size
+  for (partition in 1:partitions) {
+    lower_percent <- cummulative_weibull(lower_limit, lambda = lambda_weibull, alpha = alpha_weibull)
+    upper_percent <- cummulative_weibull(upper_limit, lambda = lambda_weibull, alpha = alpha_weibull)
+    percent <- upper_percent - lower_percent
+    
+    obtained_values <- c(obtained_values, 
+                         sum(observed_data >= lower_limit & observed_data < upper_limit))
+    expected_values <- c(expected_values, 
+                         percent * length(observed_data))
+    
+    lower_limit <- upper_limit
+    upper_limit <- upper_limit + size
+  }
+  
+  return(cbind(expected_values, obtained_values))
+}
+```
+
+Calculamos las cantidades esperadas (función de Weibull ajustada) y las 
+cantidades observadas (datos reales).
+```{r}
+partition_values <-partition_calculator(observed_data = coffee_production_antioquia$`Producción(kilos)`, 
+                                        lambda_weibull = optimize_lambda(coffee_production =  coffee_production_antioquia$`Producción(kilos)`, alpha = 2.2),
+                                        alpha_weibull = 2.2, 
+                                        partitions = 10)
+
+
+matplot(partition_values, 
+        type = "l", 
+        col = c("lightskyblue", "sandybrown"), 
+        main = "Comparación entre valores observados vs. esperados", 
+        xlab = "Partición", 
+        ylab = "Frecuencia absoluta")
+legend("topright", 
+       legend = c("Observados", "Esperados"), 
+       lty = 1, 
+       col = c("sandybrown", "lightskyblue"))
+
+chi_test <- fit_test(observed_data = partition_values[, 2], expected_data = partition_values[, 1])
+curve(dchisq(x, df = 9), 
+      from = 0, 
+      to = chi_test[1] + 1,
+      main = "Prueba de bondad de ajuste para los datos de Antioquia",
+      xlab = "x",
+      ylab = "Densidad de probabilidad")
+abline(v = chi_test[1], col = "green")
+abline(v = chi_test[2], col = "red")
+```
+
+## Cálculo de rutas eficientes
+
+```{r}
+efficient_route <- function() {
+  return(500000)
+}
+```
+
+## Costos de transporte
+
+Con el cálculo de las rutas eficientes según ciertas condiciones, se responderán 
+las siguientes preguntas: 
+
++ ¿Cuál es el costo promedio por departamento? Esto nos sirve para definir el 
+departamento que es el productor con la distribución más eficiente.
