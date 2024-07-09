@@ -6,6 +6,12 @@ output:
     number_sections: true
 ---
 
+```{r echo=FALSE, results='hide', warning=FALSE, message=FALSE}
+library(igraph)
+library(ggplot2)
+library(dplyr)
+```
+
 # Tratamiento de los datos
 
 ## Importación
@@ -330,6 +336,73 @@ abline(v = chi_test[2], col = "red")
 ```
 
 ## Cálculo de rutas eficientes
+Para el valor de los peajes se tomó la información presente en el dataset [Tarifas de Peajes ANI](https://www.datos.gov.co/Transporte/Tarifas-de-Peajes-ANI/7gj8-j6i3/about_data), que correspondiera a la tarifa de categoría 3 (Camiones de 3 y 4 ejes).
+```{r}
+tolls <- read.csv("datasets/Tarifas_de_Peajes_ANI_20240708.csv")
+```
+
+```{r}
+hist(tolls$Valor, probability = TRUE, main = "Valores de peajes (Categoria III)")
+curve(dnorm(x, mean = mean(tolls$Valor), sd = sd(tolls$Valor)), from = min(tolls$Valor), to = max(tolls$Valor), add = TRUE, col = "red")
+```
+
+Como los datos se acomodan moderadamente a la distribución normal, se asignarán los valores de los peajes gracias a runif() y teniendo en cuenta el número de presentes en cada tramo.
+
+```{r}
+cant_peajes <- c(5, 4, 3, 13, 2, 2, 18, 3, 9, 12, 12, 6, 9, 7, 17, 11, 5, 9, 7, 21, 9, 14, 14, 17, 6, 17, 18, 6, 6, 5, 9, 12, 9, 11, 7, 7, 2, 3, 2, 14, 3, 5, 15, 8, 5, 7, 5, 9, 5, 10, 12, 3, 2, 10, 10, 16, 16, 19, 4, 18, 19, 2, 10, 19, 1)
+
+sum_rnorm <- function(n) {
+  sum(rnorm(n, mean = mean(tolls$Valor), sd = sd(tolls$Valor)))
+}
+```
+
+```{r}
+cities <- c("Medellin", "Bucaramanga", "Bogota", "Tunja", "Pasto", "Puerto_Cartagena", "Puerto_Barranquilla", "Cali", "Ibague", "Cucuta", "Neiva", "Popayan")
+
+rutas <- data.frame(
+  origen = c(cities[1], cities[1], cities[1], cities[1], cities[2], cities[2], cities[2], cities[3], cities[3], cities[4], cities[6], cities[6], cities[6], cities[6], cities[6], cities[7], cities[7], cities[7], cities[7], cities[7], cities[8], cities[8], cities[8], cities[8], cities[8], cities[8], cities[8], cities[9], cities[9], cities[9], cities[9], cities[9], cities[9], cities[9], cities[9], cities[10], cities[10], cities[10], cities[10], cities[10], cities[10], cities[10], cities[10], cities[10], cities[11], cities[11], cities[11], cities[11], cities[11], cities[11], cities[11], cities[11], cities[11], cities[11], cities[12], cities[12], cities[12], cities[12], cities[12], cities[12], cities[12], cities[12], cities[12], cities[12], cities[12]),
+  destino = c(cities[2], cities[3], cities[4], cities[5], cities[3], cities[4], cities[5], cities[4], cities[5], cities[5], cities[1], cities[2], cities[3], cities[4], cities[5], cities[1], cities[2], cities[3], cities[4], cities[5], cities[1], cities[2], cities[3], cities[4], cities[5], cities[6], cities[7], cities[1], cities[2], cities[3], cities[4], cities[5], cities[6], cities[7], cities[8], cities[1], cities[2], cities[3], cities[4], cities[5], cities[6], cities[7], cities[8], cities[9], cities[1], cities[2], cities[3], cities[4], cities[5], cities[6], cities[7], cities[8], cities[9], cities[10], cities[1], cities[2], cities[3], cities[4], cities[5], cities[6], cities[7], cities[8], cities[9], cities[10], cities[11]),
+  weight = c(383, 432, 413, 813, 397, 282, 1150, 141, 828, 961, 663, 633, 1065, 908, 1523, 700, 577, 1009, 852, 1633, 443, 763, 457, 588, 384, 1102, 1139, 365, 509, 211, 341, 636, 1050, 1000, 261, 578, 197, 567, 428, 1383, 723, 668, 968, 711, 585, 676, 322, 452, 516, 1217, 1161, 387, 210, 874, 571, 891, 588, 717, 244, 1231, 1267, 141, 383, 1089, 271)
+)
+```
+
+Tomando como base que en promedio para cada 100km de recorrido, estos camiones consumen 9.25 galones de Diesel y el precio por galón es en promedio de 9065 pesos colombianos, podemos encontrar el valor de cada tramo en función de su costo por combustible.
+```{r}
+cant_combustible <- rutas$weight*0.09246022 #Conversión a galones
+costo_combustible <- cant_combustible*9065 #Conversión a precio en pesos Colombianos
+```
+
+```{r}
+# Crear el grafo
+G <- graph_from_data_frame(rutas, directed = FALSE, vertices = data.frame(cities))
+plot(G)
+```
+
+Finalmente, se suman los valores de combustible y peajes obtenidos para cada tramo. Y se obtiene el valor del mejor recorrido para un tramo.
+
+```{r}
+best_route <- function(from, to) {
+  valor_peajes <- sapply(cant_peajes, sum_rnorm)
+  rutas$weight <- costo_combustible + valor_peajes
+  G <- graph_from_data_frame(rutas, directed = FALSE, vertices = data.frame(cities))
+  
+  sp <- shortest_paths(G, from = from, to = to, weights = E(G)$weight, algorithm = "dijkstra", output = "both")
+  
+  path_vertices <- sp$vpath[[1]]
+  path_cities <- V(G)$name[path_vertices]
+  
+  total <- sum(E(G, path = path_vertices)$weight)
+  
+  list(path_cities = path_cities, total = total)
+}
+```
+
+La función retorna las ciudades por las que se pasa y la cantidad de kilómetros por recorrer.
+
+```{r}
+#ex
+best_route("Medellin", "Puerto_Cartagena")
+```
 
 ```{r}
 efficient_route <- function() {
