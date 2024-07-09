@@ -1,5 +1,5 @@
 ---
-title: "Exploración de los datos de producción agrícola"
+title: "Rutas de transporte cafeteras"
 output:
   html_document: 
     toc: true
@@ -8,7 +8,6 @@ output:
 
 ```{r echo=FALSE, results='hide', warning=FALSE, message=FALSE}
 library(igraph)
-library(ggplot2)
 library(dplyr)
 ```
 
@@ -131,7 +130,7 @@ hist(coffee_production_antioquia$`Producción(kilos)`,
      ylab = "Frecuencia absoluta")
 ```
 
-# Simulación
+# Generadores y ajustes
 
 ## Generación de producción de café
 
@@ -342,12 +341,19 @@ tolls <- read.csv("datasets/Tarifas_de_Peajes_ANI_20240708.csv")
 ```
 
 ```{r}
-hist(tolls$Valor, probability = TRUE, main = "Valores de peajes (Categoria III)")
-curve(dnorm(x, mean = mean(tolls$Valor), sd = sd(tolls$Valor)), from = min(tolls$Valor), to = max(tolls$Valor), add = TRUE, col = "red")
+hist(tolls$Valor, 
+     probability = TRUE, 
+     main = "Valores de peajes (Categoria III)")
+curve(dnorm(x, mean = mean(tolls$Valor), sd = sd(tolls$Valor)), 
+      from = min(tolls$Valor), 
+      to = max(tolls$Valor), 
+      add = TRUE, 
+      col = "red")
 ```
 
-Como los datos se acomodan moderadamente a la distribución normal, se asignarán los valores de los peajes gracias a runif() y teniendo en cuenta el número de presentes en cada tramo.
-
+Como los datos se acomodan moderadamente a la distribución normal, se asignarán 
+los valores de los peajes gracias a runif() y teniendo en cuenta el número de 
+presentes en cada tramo.
 ```{r}
 cant_peajes <- c(5, 4, 3, 13, 2, 2, 18, 3, 9, 12, 12, 6, 9, 7, 17, 11, 5, 9, 7, 21, 9, 14, 14, 17, 6, 17, 18, 6, 6, 5, 9, 12, 9, 11, 7, 7, 2, 3, 2, 14, 3, 5, 15, 8, 5, 7, 5, 9, 5, 10, 12, 3, 2, 10, 10, 16, 16, 19, 4, 18, 19, 2, 10, 19, 1)
 
@@ -366,7 +372,10 @@ rutas <- data.frame(
 )
 ```
 
-Tomando como base que en promedio para cada 100km de recorrido, estos camiones consumen 9.25 galones de Diesel y el precio por galón es en promedio de 9065 pesos colombianos, podemos encontrar el valor de cada tramo en función de su costo por combustible.
+Tomando como base que en promedio para cada 100km de recorrido, estos camiones 
+consumen 9.25 galones de Diesel y el precio por galón es en promedio de 9065 
+pesos colombianos, podemos encontrar el valor de cada tramo en función de su 
+costo por combustible.
 ```{r}
 cant_combustible <- rutas$weight*0.09246022 #Conversión a galones
 costo_combustible <- cant_combustible*9065 #Conversión a precio en pesos Colombianos
@@ -378,8 +387,8 @@ G <- graph_from_data_frame(rutas, directed = FALSE, vertices = data.frame(cities
 plot(G)
 ```
 
-Finalmente, se suman los valores de combustible y peajes obtenidos para cada tramo. Y se obtiene el valor del mejor recorrido para un tramo.
-
+Finalmente, se suman los valores de combustible y peajes obtenidos para cada 
+tramo. Se obtiene el valor del mejor recorrido para un tramo.
 ```{r}
 best_route <- function(from, to) {
   valor_peajes <- sapply(cant_peajes, sum_rnorm)
@@ -397,7 +406,8 @@ best_route <- function(from, to) {
 }
 ```
 
-La función retorna las ciudades por las que se pasa y la cantidad de kilómetros por recorrer.
+La función retorna las ciudades por las que se pasa y el costo total por 
+recorrerlas.
 
 ```{r}
 #ex
@@ -417,3 +427,97 @@ las siguientes preguntas:
 
 + ¿Cuál es el costo promedio por departamento? Esto nos sirve para definir el 
 departamento que es el productor con la distribución más eficiente.
+
+Definimos la función que repartirá la carga entre los camiones que necesitará el 
+departamento.
+```{r}
+load_distributor <- function(coffee_production) {
+  maximun_load <- 18000
+  trucks <- ceiling(coffee_production / maximun_load)
+  
+  return(trucks)
+}
+```
+
+Definimos la función de costo que utilizaremos:
+$$
+costo = camiones \cdot costo\ ruta\ eficiente
+$$
+
+```{r}
+cost <- function(trucks, cost_efficient_route) {
+  cost <- trucks * cost_efficient_route
+  
+  return(cost)
+}
+```
+
+# Simulación
+
+Definimos una forma para hacer la simulación:
+```{r}
+simulation <- function(coffee_department, origin, destiny) {
+  repetitions <- 1000
+  monthly_costs <- c()
+  monthly_production <- production_generator(coffee_data = coffee_department, 
+                                             alpha_weibull = 2.2, 
+                                             amount = repetitions)
+  
+  for (iter in 1:repetitions) {
+    trucks <- load_distributor(coffee_production = monthly_production[iter])
+    monthly_costs <- c(monthly_costs, 
+                       cost(trucks = trucks, cost_efficient_route = best_route(from = origin, to = destiny)$total))
+  }
+  
+  return(monthly_costs)
+}
+```
+
+
+## Antioquia
+
+Para el caso de Antioquia partimos de Medellín hacia el Puerto de Cartagena.
+```{r}
+antioquia_origin <- "Medellin"
+antioquia_destiny <- "Puerto_Cartagena"
+
+antioquia_costs <- simulation(coffee_department = coffee_production_antioquia$`Producción(kilos)`, 
+                              origin = antioquia_origin, 
+                              destiny = antioquia_destiny)
+hist(antioquia_costs / 1000000, 
+     col = "green",
+     main = "Costos de transporte mensuales de Antioquia", 
+     xlab = "Millones de pesos colombianos", 
+     ylab = "Frecuencia absoluta")
+```
+
+La media de costo de transporte en Antioquia fue `r mean(antioquia_costs)`.
+
+## Santander
+
+Definimos el subconjunto de datos de producción de café para Santander.
+```{r}
+coffee_production_santander <- subset(coffee_producers, 
+                                      DEPARTAMENTO == "SANTANDER", 
+                                      select = c(MUNICIPIO, `PRODUCCIÓN(t)`))
+
+coffee_production_santander$`PRODUCCIÓN(t)` <- round(coffee_production_santander$`PRODUCCIÓN(t)` * 1000 / 12)
+```
+
+Realizamos la simulación.
+```{r}
+santander_origin <- "Bucaramanga"
+santander_destiny <- "Puerto_Cartagena"
+
+santander_costs <- simulation(coffee_department = coffee_production_santander$`PRODUCCIÓN(t)`, 
+                              origin = santander_origin, 
+                              destiny = santander_destiny)
+hist(santander_costs / 1000000, 
+     col = "orange",
+     main = "Costos de transporte mensuales de Santander", 
+     xlab = "Millones de pesos colombianos", 
+     ylab = "Frecuencia absoluta")
+```
+
+La media de costo de transporte en Santander fue `r mean(santander_costs)`.
+
