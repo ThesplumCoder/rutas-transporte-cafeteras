@@ -125,7 +125,7 @@ hist(coffee_production_antioquia$`Producción(kilos)`,
      ylab = "Frecuencia absoluta")
 ```
 
-# Simulación
+# Generadores y ajustes
 
 ## Generación de producción de café
 
@@ -344,3 +344,56 @@ las siguientes preguntas:
 
 + ¿Cuál es el costo promedio por departamento? Esto nos sirve para definir el 
 departamento que es el productor con la distribución más eficiente.
+
+Definimos la función que repartirá la carga entre los camiones que necesitará el 
+departamento.
+```{r}
+load_distributor <- function(coffee_production) {
+  maximun_load <- 18000
+  trucks <- ceiling(coffee_production / maximun_load)
+  
+  return(trucks)
+}
+```
+
+Definimos la función de costo que utilizaremos:
+$$
+costo = camiones \cdot costo\ ruta\ eficiente
+$$
+
+```{r}
+cost <- function(trucks, cost_efficient_route) {
+  cost <- trucks * cost_efficient_route
+  
+  return(cost)
+}
+```
+
+# Simulación
+
+## Antioquia
+
+Para el caso de Antioquia vamos a simular $10000$ producciones mensuales de café 
+y vamos a observar sus resultados.
+```{r}
+repetitions <- 100000
+monthly_costs <- c()
+monthly_production <- production_generator(coffee_data = coffee_production_antioquia$`Producción(kilos)`, 
+                                           alpha_weibull = 2.2, 
+                                           amount = repetitions)
+
+for (iter in 1:repetitions) {
+  trucks <- load_distributor(coffee_production = monthly_production[iter])
+  monthly_costs <- c(monthly_costs, 
+                     cost(trucks = trucks, cost_efficient_route = efficient_route()))
+}
+
+hist(monthly_costs / 1000000)
+```
+
+## Santander
+
+```{r}
+coffee_production_santander <- subset(coffee_producers)
+```
+
